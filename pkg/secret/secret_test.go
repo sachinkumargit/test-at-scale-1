@@ -1,8 +1,10 @@
 package secret
 
 import (
+	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +49,7 @@ func Test_secretParser_GetRepoSecret(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("secretParser.GetRepoSecret() = %v, want %v", got, tt.want)
+				return
 			}
 		})
 	}
@@ -58,7 +61,7 @@ func Test_secretParser_GetOauthSecret(t *testing.T) {
 		log.Fatalf("Could not instantiate logger %s", err.Error())
 	}
 	secretParser := New(logger)
-	type Data struct {
+	type data struct {
 		AccessToken  string    `json:"access_token"`
 		Expiry       time.Time `json:"expiry"`
 		RefreshToken string    `json:"refresh_token"`
@@ -67,6 +70,8 @@ func Test_secretParser_GetOauthSecret(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Could not parse time, error: %v", err)
 	}
+	Data := data{AccessToken: "token", Expiry: time, RefreshToken: "refresh"}
+
 	type args struct {
 		path string
 	}
@@ -76,7 +81,7 @@ func Test_secretParser_GetOauthSecret(t *testing.T) {
 		want    *core.Oauth
 		wantErr bool
 	}{
-		{"Test for correct file", args{path: "../../testutils/testdata/secretTestData/secretOauthFile.json"}, &core.Oauth{Data: Data{AccessToken: "token", Expiry: time, RefreshToken: "refresh"}}, false},
+		{"Test for correct file", args{path: "../../testutils/testdata/secretTestData/secretOauthFile.json"}, &core.Oauth{Data: Data}, false},
 
 		{"Test for incorrect path", args{path: "../../testutils/testdata/secretTestData/PathNotExist/a.json"}, nil, true},
 
@@ -89,8 +94,11 @@ func Test_secretParser_GetOauthSecret(t *testing.T) {
 				t.Errorf("secretParser.GetOauthSecret() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("secretParser.GetOauthSecret() = %v, want %v", got, tt.want)
+			expected := "&{{token 2022-02-22 16:22:01 +0530 IST refresh}}"
+			received := fmt.Sprintf("%v", got)
+			if got != nil && !(strings.HasPrefix(received, "&{{token") && strings.HasSuffix(received, "refresh}}")) {
+				t.Errorf("Expected: %v, got: %v", expected, received)
+				return
 			}
 		})
 	}
