@@ -35,10 +35,10 @@ func getParserPayload() core.ParserResponse {
 	}
 }
 
-func getParserService(logger lumber.Logger, tasCfgManager mocks.TASConfigManager, endpoint string) *parserService {
+func getParserService(logger lumber.Logger, tasCfgManager *mocks.TASConfigManager, endpoint string) *parserService {
 	return &parserService{
 		logger:           logger,
-		tasConfigManager: &tasCfgManager,
+		tasConfigManager: tasCfgManager,
 		httpClient: http.Client{
 			Timeout: global.DefaultHTTPTimeout,
 		},
@@ -46,19 +46,19 @@ func getParserService(logger lumber.Logger, tasCfgManager mocks.TASConfigManager
 	}
 }
 
-func getLoggerPayloadAndTASConfig() (lumber.Logger, core.Payload, mocks.TASConfigManager) {
+func getLoggerAndPayload() (lumber.Logger, core.Payload) {
 	logger, err := testutils.GetLogger()
 	if err != nil {
-		fmt.Errorf("Couldn't get logger, error: %v", err)
+		fmt.Printf("Couldn't get logger, error: %v", err)
 	}
 	payload, err := testutils.GetPayload()
 	if err != nil {
-		fmt.Errorf("Couldn't get payload, error: %v", err)
+		fmt.Printf("Couldn't get payload, error: %v", err)
 	}
 	payload.LicenseTier = "small"
-	tasConfigManager := new(mocks.TASConfigManager)
+	// tasConfigManager := new(mocks.TASConfigManager)
 
-	return logger, *payload, *tasConfigManager
+	return logger, *payload
 }
 
 func mockUtil(tasCfgManager *mocks.TASConfigManager, wantErr bool, tier core.Tier) {
@@ -88,7 +88,7 @@ func Test_parserService_ParseAndValidate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger, payload, _ := getLoggerPayloadAndTASConfig()
+	logger, payload := getLoggerAndPayload()
 	type args struct {
 		ctx     context.Context
 		payload *core.Payload
@@ -108,8 +108,8 @@ func Test_parserService_ParseAndValidate(t *testing.T) {
 		{"Test ParseAndValidate for invalid license", args{ctx: context.TODO(), payload: &payload}, server.URL + "/perform-parsing", "large", false, false},
 	}
 	for _, tt := range tests {
-		_, _, tasCfgManager := getLoggerPayloadAndTASConfig()
-		mockUtil(&tasCfgManager, tt.wantMockErr, tt.tier)
+		tasCfgManager := new(mocks.TASConfigManager)
+		mockUtil(tasCfgManager, tt.wantMockErr, tt.tier)
 		p := getParserService(logger, tasCfgManager, tt.endpoint)
 		t.Run(tt.name, func(t *testing.T) {
 			if err := p.ParseAndValidate(tt.args.ctx, tt.args.payload); (err != nil) != tt.wantErr {
@@ -120,7 +120,7 @@ func Test_parserService_ParseAndValidate(t *testing.T) {
 }
 
 func Test_parserService_sendParserResponse(t *testing.T) {
-	logger, _, tasCfgManager := getLoggerPayloadAndTASConfig()
+	logger, _ := getLoggerAndPayload()
 	parserResp := getParserPayload()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/parse" {
@@ -170,7 +170,8 @@ func Test_parserService_sendParserResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := getParserService(logger, tasCfgManager, tt.endpoint)
+			tasconfigmanager := new(mocks.TASConfigManager)
+			p := getParserService(logger, tasconfigmanager, tt.endpoint)
 			if err := p.sendParserResponse(tt.args.payload); (err != nil) != tt.wantErr {
 				t.Errorf("parserService.sendParserResponse() error = %v, wantErr %v", err, tt.wantErr)
 			}

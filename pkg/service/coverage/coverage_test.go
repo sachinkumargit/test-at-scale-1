@@ -42,7 +42,7 @@ func initialiseArgs() (logger lumber.Logger, execManager *mocks.ExecutionManager
 
 	logger, err := testutils.GetLogger()
 	if err != nil {
-		fmt.Errorf("Couldn't initialise logger, error: %v", err)
+		fmt.Printf("Couldn't initialise logger, error: %v", err)
 	}
 	return logger, execManager, azureClient, zstdCompressor
 }
