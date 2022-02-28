@@ -201,15 +201,19 @@ func Test_isValidLicenseTier(t *testing.T) {
 		want    bool
 		wantErr bool
 	}{
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl1, cl1}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl1, cl2}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl2, cl3}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl3, cl3}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl4, cl4}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl5, cl5}, true, false},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl5, cl1}, false, true},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl3, cl1}, false, true},
-		{"Test: yamlLicense: small, currentLicense: xsmall", args{yl5, cl3}, false, true},
+		{"Test: yamlLicense: xsmall, currentLicense: xsmall", args{yl1, cl1}, true, false},
+		{"Test: yamlLicense: xsmall, currentLicense: small", args{yl1, cl2}, true, false},
+		{"Test: yamlLicense: small, currentLicense: medium", args{yl2, cl3}, true, false},
+		{"Test: yamlLicense: medium, currentLicense: medium", args{yl3, cl3}, true, false},
+		{"Test: yamlLicense: large, currentLicense: large", args{yl4, cl4}, true, false},
+		{"Test: yamlLicense: xlarge, currentLicense: xlarge", args{yl5, cl5}, true, false},
+		{"Test: yamlLicense: xlarge, currentLicense: xsmall", args{yl5, cl1}, false, true},
+		{"Test: yamlLicense: medium, currentLicense: xsmall", args{yl3, cl1}, false, true},
+		{"Test: yamlLicense: xlarge, currentLicense: medium", args{yl5, cl3}, false, true},
+
+		// TODO: Make neccessary changes in source code for the following tests to pass
+		// {"Test: yamlLicense: abc, currentLicense: small", args{"abc", "small"}, false, true},
+		// {"Test: yamlLicense: yl, currentLicense: small", args{"yl", "small"}, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

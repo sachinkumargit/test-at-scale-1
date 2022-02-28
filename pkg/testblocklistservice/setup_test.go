@@ -103,7 +103,6 @@ func TestTestBlockListService_fetchBlockListFromNeuron(t *testing.T) {
 		httpClient          http.Client
 		endpoint            string
 		blocklistedEntities map[string][]blocklist
-		once                sync.Once
 		errChan             chan error
 	}
 	type args struct {
@@ -123,7 +122,6 @@ func TestTestBlockListService_fetchBlockListFromNeuron(t *testing.T) {
 				httpClient:          httpClient,
 				endpoint:            server.URL + "/testBlocklist.json",
 				blocklistedEntities: blocklistedEntities,
-				once:                sync.Once{},
 				errChan:             make(chan error, 1),
 			},
 			args{
@@ -140,7 +138,6 @@ func TestTestBlockListService_fetchBlockListFromNeuron(t *testing.T) {
 				httpClient:          httpClient,
 				endpoint:            "/dne.json",
 				blocklistedEntities: blocklistedEntities,
-				once:                sync.Once{},
 				errChan:             make(chan error, 1),
 			},
 			args{
@@ -157,7 +154,6 @@ func TestTestBlockListService_fetchBlockListFromNeuron(t *testing.T) {
 				httpClient:          httpClient,
 				endpoint:            server2.URL + "/non200",
 				blocklistedEntities: blocklistedEntities,
-				once:                sync.Once{},
 				errChan:             make(chan error, 1),
 			},
 			args{
@@ -175,7 +171,7 @@ func TestTestBlockListService_fetchBlockListFromNeuron(t *testing.T) {
 				httpClient:          tt.fields.httpClient,
 				endpoint:            tt.fields.endpoint,
 				blocklistedEntities: tt.fields.blocklistedEntities,
-				once:                tt.fields.once,
+				once:                sync.Once{},
 				errChan:             tt.fields.errChan,
 			}
 			if err := tbs.fetchBlockListFromNeuron(tt.args.ctx, tt.args.repoID); (err != nil) != tt.wantErr {
@@ -253,7 +249,6 @@ func TestTestBlockListService_populateBlockList(t *testing.T) {
 		httpClient          http.Client
 		endpoint            string
 		blocklistedEntities map[string][]blocklist
-		once                sync.Once
 		errChan             chan error
 	}
 	type args struct {
@@ -279,7 +274,7 @@ func TestTestBlockListService_populateBlockList(t *testing.T) {
 						},
 					},
 				},
-				once:    sync.Once{},
+				// once:    sync.Once{},
 				errChan: make(chan error, 1)},
 			args{
 				blocklistSource:   "./",
@@ -294,7 +289,7 @@ func TestTestBlockListService_populateBlockList(t *testing.T) {
 				httpClient:          tt.fields.httpClient,
 				endpoint:            tt.fields.endpoint,
 				blocklistedEntities: tt.fields.blocklistedEntities,
-				once:                tt.fields.once,
+				once:                sync.Once{},
 				errChan:             tt.fields.errChan,
 			}
 			tbs.populateBlockList(tt.args.blocklistSource, tt.args.blocklistLocators)

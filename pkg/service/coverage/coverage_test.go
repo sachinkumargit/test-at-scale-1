@@ -312,31 +312,36 @@ func Test_codeCoverageService_downloadAndDecompressParentCommitDir(t *testing.T)
 	}
 }
 
-func Test_codeCoverageService_copyFromParentCommitDir(t *testing.T) {
-	logger, execManager, azureClient, zstdCompressor := initialiseArgs()
-	type args struct {
-		parentCommitDir string
-		commitDir       string
-		removedFiles    []string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	c := newCodeCoverageService(logger, execManager, "", azureClient, zstdCompressor, "")
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := c.copyFromParentCommitDir(tt.args.parentCommitDir, tt.args.commitDir, tt.args.removedFiles...); (err != nil) != tt.wantErr {
-				t.Errorf("codeCoverageService.copyFromParentCommitDir() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func Test_codeCoverageService_getParentCommitCoverageDir(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if r.URL.RawQuery == "commitID=non200&repoID=non200" {
+			w.WriteHeader(300)
+			return
+		}
+
+		if r.URL.RawQuery == "commitID=payloadError&repoID=payloadDecodeError" {
+			_, writeErr := fmt.Fprintln(w, `{"undefined_field"}`)
+			if writeErr != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := fmt.Fprintln(w, `{"blob_link": "http://fakeblob.link", "parent_commit" : "fake_parent_commit"}`)
+		if writeErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer ts.Close()
+
 	logger, execManager, azureClient, zstdCompressor := initialiseArgs()
 	type args struct {
 		repoID   string
@@ -348,9 +353,13 @@ func Test_codeCoverageService_getParentCommitCoverageDir(t *testing.T) {
 		wantCoverage parentCommitCoverage
 		wantErr      bool
 	}{
-		// TODO: Add test cases.
+		{"Test getParentCommitCoverageDir", args{repoID: "dummyRepoID", commitID: "dummyCommitID"}, parentCommitCoverage{Bloblink: "http://fakeblob.link", ParentCommit: "fake_parent_commit"}, false},
+
+		{"Test getParentCommitCoverageDir for non 200 status error", args{repoID: "non200", commitID: "non200"}, parentCommitCoverage{}, true},
+
+		{"Test getParentCommitCoverageDir for payloadDecodeError", args{repoID: "payloadDecodeError", commitID: "payloadError"}, parentCommitCoverage{}, true},
 	}
-	c := newCodeCoverageService(logger, execManager, "", azureClient, zstdCompressor, "")
+	c := newCodeCoverageService(logger, execManager, "", azureClient, zstdCompressor, ts.URL)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotCoverage, err := c.getParentCommitCoverageDir(tt.args.repoID, tt.args.commitID)
@@ -366,19 +375,49 @@ func Test_codeCoverageService_getParentCommitCoverageDir(t *testing.T) {
 }
 
 func Test_codeCoverageService_sendCoverageData(t *testing.T) {
+	payload := []coverageData{
+		{
+			BuildID:       "buildID1",
+			RepoID:        "repoID1",
+			CommitID:      "commitID1",
+			BlobLink:      "blobLink1",
+			TotalCoverage: json.RawMessage([]byte(`{"bar":"baz"}`)),
+		},
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/endpoint", func(res http.ResponseWriter, req *http.Request) {
+		body, _ := ioutil.ReadAll(req.Body)
+		expResp := `[{"build_id":"buildID1","repo_id":"repoID1","commit_id":"commitID1","blob_link":"blobLink1","total_coverage":{"bar":"baz"}}]`
+		if !reflect.DeepEqual(string(body), expResp) {
+			t.Errorf("Expected response body: %v, got: %v\n", expResp, string(body))
+		}
+		res.WriteHeader(200)
+	})
+	mux.HandleFunc("/endpoint-err", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(404)
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
 	logger, execManager, azureClient, zstdCompressor := initialiseArgs()
-	c := newCodeCoverageService(logger, execManager, "", azureClient, zstdCompressor, "")
 	type args struct {
 		payload []coverageData
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		endpoint string
+		wantErr  bool
 	}{
-		// TODO: Add test cases.
+		{"Test sendCoverageData for success", args{payload: payload}, "/endpoint", false},
+
+		{"Test sendCoverageData for non 200 status", args{payload: payload}, "/endpoint-err", true},
 	}
 	for _, tt := range tests {
+		c := newCodeCoverageService(logger, execManager, "", azureClient, zstdCompressor, ts.URL+tt.endpoint)
 		t.Run(tt.name, func(t *testing.T) {
 			if err := c.sendCoverageData(tt.args.payload); (err != nil) != tt.wantErr {
 				t.Errorf("codeCoverageService.sendCoverageData() error = %v, wantErr %v", err, tt.wantErr)
@@ -399,7 +438,9 @@ func Test_codeCoverageService_getTotalCoverage(t *testing.T) {
 		want    json.RawMessage
 		wantErr bool
 	}{
-		// {""}
+		{"Test getTotalCoverage", args{"../../../testutils/testdata/coverage/sample/coverage-final.json"}, json.RawMessage([]byte(`"80%"`)), false},
+
+		{"Test getTotalCoverage for no field of total coverage", args{"../../../testutils/testdata/coverage/coverage-final.json"}, json.RawMessage{}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -408,8 +449,8 @@ func Test_codeCoverageService_getTotalCoverage(t *testing.T) {
 				t.Errorf("codeCoverageService.getTotalCoverage() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("codeCoverageService.getTotalCoverage() = %v, want %v", got, tt.want)
+			if len(tt.want) > 0 && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("codeCoverageService.getTotalCoverage() = %v, want %v", string(got), string(tt.want))
 			}
 		})
 	}
